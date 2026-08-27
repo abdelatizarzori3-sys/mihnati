@@ -2,6 +2,9 @@
  * مِهنتي — غرفة القرار: صفحة أداة RTL بطابع تحريري وتقني.
  * المبدأ: وضوح تجاري، كحلي حِبري، بنفسجي قرار، وأوراق عروض عاجية متداخلة.
  */
+import { useAuth } from "@/_core/hooks/useAuth";
+import { startLogin } from "@/const";
+import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import {
   ArrowLeft,
@@ -14,6 +17,9 @@ import {
   FileText,
   Flame,
   Layers3,
+  LibraryBig,
+  Loader2,
+  LogOut,
   Menu,
   MoveLeft,
   Plus,
@@ -22,6 +28,8 @@ import {
   Sparkles,
   Target,
   Timer,
+  Trash2,
+  UserRound,
   WalletCards,
   X,
 } from "lucide-react";
@@ -93,6 +101,24 @@ function buildOffer(skill: string, audience: string, outcome: string, model: Off
 }
 
 export default function Home() {
+  const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
+  const utils = trpc.useUtils();
+  const savedOffersQuery = trpc.offers.list.useQuery(undefined, { enabled: isAuthenticated });
+  const createOffer = trpc.offers.create.useMutation({
+    onSuccess: async () => {
+      await utils.offers.list.invalidate();
+      toast.success("حُفظ العرض في حسابك", { description: "يمكنك العودة إليه من مكتبتك في أي وقت." });
+    },
+    onError: () => toast.error("تعذر حفظ العرض الآن. حاول مرة أخرى."),
+  });
+  const deleteOffer = trpc.offers.delete.useMutation({
+    onSuccess: async () => {
+      await utils.offers.list.invalidate();
+      toast.success("حُذف العرض من مكتبتك");
+    },
+    onError: () => toast.error("تعذر حذف العرض الآن. حاول مرة أخرى."),
+  });
+
   const [skill, setSkill] = useState("تصميم الهوية البصرية");
   const [audience, setAudience] = useState(audiences[0]);
   const [outcome, setOutcome] = useState("الظهور بشكل احترافي وتحويل الزوار إلى مشترين");
@@ -100,8 +126,6 @@ export default function Home() {
   const [offer, setOffer] = useState<OfferData>(initialOffer);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [savedCount, setSavedCount] = useState(2);
-
   const offerScore = Math.min(100, 63 + (skill.trim().length > 4 ? 12 : 0) + (outcome.trim().length > 14 ? 13 : 0) + (model === "retainer" ? 5 : 0));
 
   function generateOffer() {
@@ -133,8 +157,26 @@ export default function Home() {
   }
 
   function saveOffer() {
-    setSavedCount((count) => count + 1);
-    toast.success("حُفظ في مكتبة العروض", { description: "هذه النسخة محلية في تجربة الأداة." });
+    if (!isAuthenticated) {
+      toast.info("سجّل دخولك لحفظ عروضك سحابيًا");
+      startLogin();
+      return;
+    }
+
+    createOffer.mutate({
+      skill,
+      audience,
+      outcome,
+      model,
+      title: offer.title,
+      promise: offer.promise,
+      deliverables: offer.includes,
+      timeline: offer.timeline,
+      price: offer.price,
+      priceNote: offer.priceNote,
+      outreach: offer.outreach,
+      clarityScore: offerScore,
+    });
   }
 
   return (
@@ -148,19 +190,19 @@ export default function Home() {
 
           <nav className="hidden items-center gap-7 text-sm font-medium text-slate-300 lg:flex" aria-label="التنقل الرئيسي">
             <button onClick={() => scrollToSection("tool")} className="nav-link">صانع العروض</button>
+            <button onClick={() => scrollToSection("library")} className="nav-link">مكتبتي</button>
             <button onClick={() => scrollToSection("method")} className="nav-link">كيف يعمل</button>
             <button onClick={() => scrollToSection("business")} className="nav-link">نموذج الربح</button>
           </nav>
 
           <div className="hidden items-center gap-3 sm:flex">
-            <span className="flex items-center gap-1.5 text-xs text-slate-400"><span className="h-1.5 w-1.5 rounded-full bg-[#8EF3CA]" />نسخة تجريبية</span>
-            <button onClick={() => scrollToSection("tool")} className="button-primary text-sm">ابنِ عرضك <ArrowLeft className="h-4 w-4" /></button>
+            {authLoading ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : isAuthenticated ? <><button onClick={() => scrollToSection("library")} className="account-pill"><UserRound className="h-3.5 w-3.5" />{user?.name || "حسابي"}</button><button onClick={() => logout()} className="logout-button" title="تسجيل الخروج"><LogOut className="h-4 w-4" /></button></> : <button onClick={() => startLogin()} className="button-primary text-sm">تسجيل الدخول للحفظ <ArrowLeft className="h-4 w-4" /></button>}
           </div>
           <button onClick={() => setIsMenuOpen((open) => !open)} className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white lg:hidden" aria-label="فتح القائمة">
             {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
-        {isMenuOpen && <div className="border-t border-white/10 bg-[#161C36] px-5 py-4 lg:hidden"><div className="mx-auto flex max-w-[1440px] flex-col gap-2"><button onClick={() => scrollToSection("tool")} className="mobile-nav-link">صانع العروض</button><button onClick={() => scrollToSection("method")} className="mobile-nav-link">كيف يعمل</button><button onClick={() => scrollToSection("business")} className="mobile-nav-link">نموذج الربح</button></div></div>}
+        {isMenuOpen && <div className="border-t border-white/10 bg-[#161C36] px-5 py-4 lg:hidden"><div className="mx-auto flex max-w-[1440px] flex-col gap-2"><button onClick={() => scrollToSection("tool")} className="mobile-nav-link">صانع العروض</button><button onClick={() => scrollToSection("library")} className="mobile-nav-link">مكتبتي</button><button onClick={() => scrollToSection("method")} className="mobile-nav-link">كيف يعمل</button><button onClick={() => scrollToSection("business")} className="mobile-nav-link">نموذج الربح</button>{isAuthenticated ? <button onClick={() => logout()} className="mobile-nav-link text-[#8EF3CA]">تسجيل الخروج</button> : <button onClick={() => startLogin()} className="mobile-nav-link text-[#8EF3CA]">تسجيل الدخول للحفظ</button>}</div></div>}
       </header>
 
       <main id="top" className="relative">
@@ -245,10 +287,20 @@ export default function Home() {
                   <div className="proposal-footer"><div><span>المدة</span><strong>{offer.timeline}</strong></div><div><span>الاستثمار</span><strong className="price-text">{offer.price}</strong><small>{offer.priceNote}</small></div></div>
                 </article>
                 <div className="score-card"><div><span>مؤشر وضوح العرض</span><strong>{offerScore}<small>/100</small></strong></div><div className="score-track"><span style={{ width: `${offerScore}%` }} /></div><p>{offerScore > 85 ? "النتيجة واضحة بما يكفي لتبدأ عرضها." : "أضف نتيجة أدق لتقوية العرض."}</p></div>
-                <div className="proposal-actions"><button onClick={saveOffer} className="action-button"><Plus className="h-4 w-4" />حفظ</button><button onClick={downloadOffer} className="action-button"><Download className="h-4 w-4" />تنزيل</button><button onClick={() => copyText(`${offer.title}\n${offer.promise}`, "ملخص العرض")} className="action-button"><Copy className="h-4 w-4" />نسخ</button></div>
+                <div className="proposal-actions"><button onClick={saveOffer} disabled={createOffer.isPending} className="action-button action-save">{createOffer.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{isAuthenticated ? "حفظ سحابي" : "حفظ بحسابي"}</button><button onClick={downloadOffer} className="action-button"><Download className="h-4 w-4" />تنزيل</button><button onClick={() => copyText(`${offer.title}\n${offer.promise}`, "ملخص العرض")} className="action-button"><Copy className="h-4 w-4" />نسخ</button></div>
               </section>
             </div>
-            <p className="mt-4 text-xs leading-6 text-[#75727C]">اقتراحات السعر والمؤشرات تعليمية لمساعدتك على بناء عرض واضح، وليست ضمانًا للدخل أو للنتائج التجارية.</p>
+            <p className="mt-4 text-xs leading-6 text-[#75727C]">{isAuthenticated ? "تُحفظ عروضك في حسابك السحابي ولا تكون مرئية للمستخدمين الآخرين." : "سجّل دخولك لحفظ العرض في مكتبتك السحابية الخاصة."} اقتراحات السعر والمؤشرات تعليمية وليست ضمانًا للدخل أو للنتائج التجارية.</p>
+          </div>
+        </section>
+
+        <section id="library" className="relative bg-[#151B35] py-16 sm:py-20">
+          <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+            <div className="flex flex-col justify-between gap-5 border-b border-white/10 pb-7 sm:flex-row sm:items-end">
+              <div><div className="eyebrow"><LibraryBig className="h-3.5 w-3.5" />مكتبتك السحابية</div><h2 className="mt-3 font-display text-3xl font-extrabold text-white sm:text-4xl">العروض التي بنيتها، محفوظة لحسابك.</h2></div>
+              {isAuthenticated ? <span className="library-account"><BadgeCheck className="h-4 w-4" />{user?.name || "حسابك"} · محفوظة سحابيًا</span> : <button onClick={() => startLogin()} className="button-primary">سجّل الدخول للمكتبة <ArrowLeft className="h-4 w-4" /></button>}
+            </div>
+            {!isAuthenticated ? <div className="library-empty"><div className="library-icon"><LibraryBig className="h-6 w-6" /></div><div><h3>أنشئ حسابك لتبقى عروضك معك</h3><p>بعد تسجيل الدخول، سيُحفظ كل عرض تختاره في مكتبة خاصة بحسابك ويمكنك الرجوع إليه من أي جهاز.</p></div><button onClick={() => startLogin()} className="library-cta">تسجيل الدخول <ArrowLeft className="h-4 w-4" /></button></div> : savedOffersQuery.isLoading ? <div className="library-loading"><Loader2 className="h-5 w-5 animate-spin" />جارٍ تحميل مكتبتك…</div> : savedOffersQuery.isError ? <div className="library-error">تعذر تحميل عروضك حاليًا. حدّث الصفحة أو أعد المحاولة بعد لحظات.</div> : savedOffersQuery.data?.length ? <div className="library-grid">{savedOffersQuery.data.map((savedOffer) => <article key={savedOffer.id} className="saved-offer-card"><div className="saved-offer-top"><span className="cloud-stamp"><BadgeCheck className="h-3.5 w-3.5" />محفوظ</span><button onClick={() => deleteOffer.mutate({ id: savedOffer.id })} disabled={deleteOffer.isPending} className="delete-offer" aria-label={`حذف ${savedOffer.title}`}><Trash2 className="h-4 w-4" /></button></div><h3>{savedOffer.title}</h3><p>{savedOffer.promise}</p><div className="saved-offer-meta"><span><Timer className="h-3.5 w-3.5" />{savedOffer.timeline}</span><span>{savedOffer.price}</span></div><div className="saved-offer-bottom"><span>{new Date(savedOffer.updatedAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" })}</span><span className="score-mini">وضوح {savedOffer.clarityScore}/100</span></div></article>)}</div> : <div className="library-empty"><div className="library-icon"><Sparkles className="h-6 w-6" /></div><div><h3>مكتبتك جاهزة لأول عرض</h3><p>اضغط «حفظ سحابي» في غرفة بناء العرض، وسنحتفظ بالنسخة في حسابك لتعود إليها لاحقًا.</p></div><button onClick={() => scrollToSection("tool")} className="library-cta">ابنِ عرضًا <ArrowLeft className="h-4 w-4" /></button></div>}
           </div>
         </section>
 
@@ -302,7 +354,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-white/10 bg-[#0D1122] py-7 text-sm text-slate-500"><div className="mx-auto flex max-w-[1440px] flex-col gap-4 px-5 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-12"><div className="flex items-center gap-2"><img src="/manus-storage/mihnati-logo-mark_d0ba8924.png" alt="" className="h-6 w-6" /><span className="font-display font-bold text-slate-200">مِهنتي</span><span>— حوّل مهارتك إلى دخل.</span></div><span>{savedCount} عروض محفوظة في هذه الجلسة</span></div></footer>
+      <footer className="border-t border-white/10 bg-[#0D1122] py-7 text-sm text-slate-500"><div className="mx-auto flex max-w-[1440px] flex-col gap-4 px-5 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-12"><div className="flex items-center gap-2"><img src="/manus-storage/mihnati-logo-mark_d0ba8924.png" alt="" className="h-6 w-6" /><span className="font-display font-bold text-slate-200">مِهنتي</span><span>— حوّل مهارتك إلى دخل.</span></div><span>{isAuthenticated ? `${savedOffersQuery.data?.length ?? 0} عروض محفوظة في حسابك` : "سجّل الدخول لحفظ عروضك سحابيًا"}</span></div></footer>
     </div>
   );
 }
