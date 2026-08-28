@@ -1,11 +1,14 @@
 import { COOKIE_NAME } from "@shared/const";
 import { z } from "zod";
-import { createUserOffer, deleteUserOffer, listUserOffers } from "./db";
+import { createUserOffer, deleteUserOffer, listUserOffers, updateUserOffer } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
 const offerInput = z.object({
+  clientName: z.string().trim().max(160).default(""),
+  sector: z.string().trim().max(120).default(""),
+  tags: z.array(z.string().trim().min(1).max(60)).max(16).default([]),
   skill: z.string().trim().min(2).max(255),
   audience: z.string().trim().min(2).max(255),
   outcome: z.string().trim().min(4).max(4000),
@@ -19,6 +22,26 @@ const offerInput = z.object({
   outreach: z.string().trim().min(4).max(4000),
   clarityScore: z.number().int().min(0).max(100),
 });
+
+function toSavedOffer(input: z.infer<typeof offerInput>) {
+  return {
+    clientName: input.clientName,
+    sector: input.sector,
+    tagsJson: JSON.stringify(Array.from(new Set(input.tags))),
+    skill: input.skill,
+    audience: input.audience,
+    outcome: input.outcome,
+    model: input.model,
+    title: input.title,
+    promise: input.promise,
+    deliverablesJson: JSON.stringify(input.deliverables),
+    timeline: input.timeline,
+    price: input.price,
+    priceNote: input.priceNote,
+    outreach: input.outreach,
+    clarityScore: input.clarityScore,
+  };
+}
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -35,22 +58,10 @@ export const appRouter = router({
   }),
   offers: router({
     list: protectedProcedure.query(({ ctx }) => listUserOffers(ctx.user.id)),
-    create: protectedProcedure.input(offerInput).mutation(({ ctx, input }) =>
-      createUserOffer(ctx.user.id, {
-        skill: input.skill,
-        audience: input.audience,
-        outcome: input.outcome,
-        model: input.model,
-        title: input.title,
-        promise: input.promise,
-        deliverablesJson: JSON.stringify(input.deliverables),
-        timeline: input.timeline,
-        price: input.price,
-        priceNote: input.priceNote,
-        outreach: input.outreach,
-        clarityScore: input.clarityScore,
-      }),
-    ),
+    create: protectedProcedure.input(offerInput).mutation(({ ctx, input }) => createUserOffer(ctx.user.id, toSavedOffer(input))),
+    update: protectedProcedure.input(offerInput.extend({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => ({
+      offer: await updateUserOffer(ctx.user.id, input.id, toSavedOffer(input)),
+    })),
     delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => ({
       deleted: await deleteUserOffer(ctx.user.id, input.id),
     })),

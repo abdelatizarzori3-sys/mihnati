@@ -4,6 +4,7 @@
  */
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
+import OfferLibrary from "@/components/OfferLibrary";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import {
@@ -22,10 +23,13 @@ import {
   LogOut,
   Menu,
   MoveLeft,
+  Pencil,
   Plus,
   RotateCcw,
+  Search,
   Send,
   Sparkles,
+  Tag,
   Target,
   Timer,
   Trash2,
@@ -45,6 +49,25 @@ type OfferData = {
   price: string;
   priceNote: string;
   outreach: string;
+};
+
+type EditingOffer = {
+  id: number;
+  clientName: string;
+  sector: string;
+  tagsText: string;
+  skill: string;
+  audience: string;
+  outcome: string;
+  model: OfferModel;
+  title: string;
+  promise: string;
+  deliverablesText: string;
+  timeline: string;
+  price: string;
+  priceNote: string;
+  outreach: string;
+  clarityScore: number;
 };
 
 const audiences = [
@@ -100,6 +123,23 @@ function buildOffer(skill: string, audience: string, outcome: string, model: Off
   };
 }
 
+function parseStringList(value: string) {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseTags(value: string) {
+  return value
+    .split(/[،,]/)
+    .map((tag) => tag.trim())
+    .filter((tag, index, tags) => Boolean(tag) && tags.indexOf(tag) === index)
+    .slice(0, 16);
+}
+
 export default function Home() {
   const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
   const utils = trpc.useUtils();
@@ -118,6 +158,13 @@ export default function Home() {
     },
     onError: () => toast.error("تعذر حذف العرض الآن. حاول مرة أخرى."),
   });
+  const updateOffer = trpc.offers.update.useMutation({
+    onSuccess: async () => {
+      await utils.offers.list.invalidate();
+      toast.success("تم تحديث العرض والوسوم", { description: "انعكست التغييرات في مكتبتك السحابية." });
+    },
+    onError: () => toast.error("تعذر تحديث العرض الآن. تحقق من الحقول ثم أعد المحاولة."),
+  });
 
   const [skill, setSkill] = useState("تصميم الهوية البصرية");
   const [audience, setAudience] = useState(audiences[0]);
@@ -126,7 +173,26 @@ export default function Home() {
   const [offer, setOffer] = useState<OfferData>(initialOffer);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [clientName, setClientName] = useState("");
+  const [sector, setSector] = useState("");
+  const [tagsText, setTagsText] = useState("");
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [activeTag, setActiveTag] = useState("");
+  const [editingOffer, setEditingOffer] = useState<EditingOffer | null>(null);
   const offerScore = Math.min(100, 63 + (skill.trim().length > 4 ? 12 : 0) + (outcome.trim().length > 14 ? 13 : 0) + (model === "retainer" ? 5 : 0));
+  const savedOffers = savedOffersQuery.data ?? [];
+  const availableTags = savedOffers.reduce((tags, savedOffer) => {
+    parseStringList(savedOffer.tagsJson).forEach((tag) => {
+      if (!tags.includes(tag)) tags.push(tag);
+    });
+    return tags;
+  }, [] as string[]);
+  const normalizedSearch = librarySearch.trim().toLocaleLowerCase("ar");
+  const visibleOffers = savedOffers.filter((savedOffer) => {
+    const tags = parseStringList(savedOffer.tagsJson);
+    const searchable = [savedOffer.title, savedOffer.promise, savedOffer.clientName, savedOffer.sector, ...tags].join(" ").toLocaleLowerCase("ar");
+    return (!normalizedSearch || searchable.includes(normalizedSearch)) && (!activeTag || tags.includes(activeTag));
+  });
 
   function generateOffer() {
     const nextOffer = buildOffer(skill, audience, outcome, model);
@@ -164,6 +230,9 @@ export default function Home() {
     }
 
     createOffer.mutate({
+      clientName: clientName.trim(),
+      sector: sector.trim(),
+      tags: parseTags(tagsText),
       skill,
       audience,
       outcome,
@@ -177,6 +246,58 @@ export default function Home() {
       outreach: offer.outreach,
       clarityScore: offerScore,
     });
+  }
+
+  function openEditor(savedOffer: typeof savedOffers[number]) {
+    setEditingOffer({
+      id: savedOffer.id,
+      clientName: savedOffer.clientName,
+      sector: savedOffer.sector,
+      tagsText: parseStringList(savedOffer.tagsJson).join("، "),
+      skill: savedOffer.skill,
+      audience: savedOffer.audience,
+      outcome: savedOffer.outcome,
+      model: savedOffer.model as OfferModel,
+      title: savedOffer.title,
+      promise: savedOffer.promise,
+      deliverablesText: parseStringList(savedOffer.deliverablesJson).join("\n"),
+      timeline: savedOffer.timeline,
+      price: savedOffer.price,
+      priceNote: savedOffer.priceNote,
+      outreach: savedOffer.outreach,
+      clarityScore: savedOffer.clarityScore,
+    });
+  }
+
+  function updateEditingOffer(field: keyof EditingOffer, value: string | number) {
+    setEditingOffer((current) => current ? { ...current, [field]: value } : current);
+  }
+
+  function saveEditedOffer() {
+    if (!editingOffer) return;
+    const deliverables = editingOffer.deliverablesText.split("\n").map((item) => item.trim()).filter(Boolean);
+    if (!deliverables.length) {
+      toast.error("أضف بندًا واحدًا على الأقل ضمن تسليمات العرض.");
+      return;
+    }
+    updateOffer.mutate({
+      id: editingOffer.id,
+      clientName: editingOffer.clientName.trim(),
+      sector: editingOffer.sector.trim(),
+      tags: parseTags(editingOffer.tagsText),
+      skill: editingOffer.skill.trim(),
+      audience: editingOffer.audience.trim(),
+      outcome: editingOffer.outcome.trim(),
+      model: editingOffer.model,
+      title: editingOffer.title.trim(),
+      promise: editingOffer.promise.trim(),
+      deliverables,
+      timeline: editingOffer.timeline.trim(),
+      price: editingOffer.price.trim(),
+      priceNote: editingOffer.priceNote.trim(),
+      outreach: editingOffer.outreach.trim(),
+      clarityScore: editingOffer.clarityScore,
+    }, { onSuccess: () => setEditingOffer(null) });
   }
 
   return (
@@ -267,12 +388,13 @@ export default function Home() {
               </aside>
 
               <div className="room-form">
-                <div className="mb-7 flex items-center justify-between"><div><p className="kicker">الخطوة 4 من 4</p><h3 className="font-display text-2xl font-bold">شكّل العرض</h3></div><button onClick={() => { setSkill("تصميم الهوية البصرية"); setAudience(audiences[0]); setOutcome("الظهور بشكل احترافي وتحويل الزوار إلى مشترين"); setModel("project"); setOffer(initialOffer); setHasGenerated(false); }} className="reset-button"><RotateCcw className="h-3.5 w-3.5" />إعادة</button></div>
+                <div className="mb-7 flex items-center justify-between"><div><p className="kicker">الخطوة 4 من 4</p><h3 className="font-display text-2xl font-bold">شكّل العرض</h3></div><button onClick={() => { setSkill("تصميم الهوية البصرية"); setAudience(audiences[0]); setOutcome("الظهور بشكل احترافي وتحويل الزوار إلى مشترين"); setModel("project"); setClientName(""); setSector(""); setTagsText(""); setOffer(initialOffer); setHasGenerated(false); }} className="reset-button"><RotateCcw className="h-3.5 w-3.5" />إعادة</button></div>
                 <div className="space-y-5">
                   <label className="field-label">مهارتك أو خدمتك<textarea value={skill} onChange={(event) => setSkill(event.target.value)} rows={2} className="field-input resize-none" placeholder="مثال: كتابة محتوى لينكدإن" /></label>
                   <label className="field-label">العميل الذي تريد خدمته<select value={audience} onChange={(event) => setAudience(event.target.value)} className="field-input">{audiences.map((item) => <option key={item}>{item}</option>)}</select></label>
                   <label className="field-label">النتيجة التي يريدها العميل<textarea value={outcome} onChange={(event) => setOutcome(event.target.value)} rows={2} className="field-input resize-none" placeholder="مثال: زيادة الطلبات عبر صفحة هبوط أوضح" /></label>
                   <fieldset><legend className="field-label mb-2">نموذج البيع</legend><div className="model-options">{(Object.keys(modelContent) as OfferModel[]).map((option) => <button type="button" key={option} onClick={() => setModel(option)} className={model === option ? "model-option selected" : "model-option"}><span><strong>{modelContent[option].label}</strong><small>{modelContent[option].tag}</small></span>{model === option && <Check className="h-4 w-4" />}</button>)}</div></fieldset>
+                  <div className="save-context"><div className="save-context-title"><Tag className="h-3.5 w-3.5" />تصنيف عند الحفظ <span>اختياري</span></div><div className="save-context-grid"><label className="field-label">اسم العميل<input value={clientName} onChange={(event) => setClientName(event.target.value)} className="field-input" placeholder="مثال: متجر نواة" /></label><label className="field-label">القطاع<input value={sector} onChange={(event) => setSector(event.target.value)} className="field-input" placeholder="مثال: تجارة إلكترونية" /></label></div><label className="field-label mt-3">وسومك الخاصة<input value={tagsText} onChange={(event) => setTagsText(event.target.value)} className="field-input" placeholder="مثال: إطلاق، رمضان، عميل مهم" /></label><p>افصل الوسوم بفاصلة عربية أو إنجليزية لتظهر لاحقًا كمرشحات في مكتبتك.</p></div>
                   <button onClick={generateOffer} className="generate-button"><Sparkles className="h-4 w-4" />{hasGenerated ? "أعد بناء العرض" : "ابنِ عرضًا قابلًا للبيع"}<ArrowLeft className="mr-auto h-4 w-4" /></button>
                 </div>
               </div>
@@ -294,15 +416,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="library" className="relative bg-[#151B35] py-16 sm:py-20">
-          <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
-            <div className="flex flex-col justify-between gap-5 border-b border-white/10 pb-7 sm:flex-row sm:items-end">
-              <div><div className="eyebrow"><LibraryBig className="h-3.5 w-3.5" />مكتبتك السحابية</div><h2 className="mt-3 font-display text-3xl font-extrabold text-white sm:text-4xl">العروض التي بنيتها، محفوظة لحسابك.</h2></div>
-              {isAuthenticated ? <span className="library-account"><BadgeCheck className="h-4 w-4" />{user?.name || "حسابك"} · محفوظة سحابيًا</span> : <button onClick={() => startLogin()} className="button-primary">سجّل الدخول للمكتبة <ArrowLeft className="h-4 w-4" /></button>}
-            </div>
-            {!isAuthenticated ? <div className="library-empty"><div className="library-icon"><LibraryBig className="h-6 w-6" /></div><div><h3>أنشئ حسابك لتبقى عروضك معك</h3><p>بعد تسجيل الدخول، سيُحفظ كل عرض تختاره في مكتبة خاصة بحسابك ويمكنك الرجوع إليه من أي جهاز.</p></div><button onClick={() => startLogin()} className="library-cta">تسجيل الدخول <ArrowLeft className="h-4 w-4" /></button></div> : savedOffersQuery.isLoading ? <div className="library-loading"><Loader2 className="h-5 w-5 animate-spin" />جارٍ تحميل مكتبتك…</div> : savedOffersQuery.isError ? <div className="library-error">تعذر تحميل عروضك حاليًا. حدّث الصفحة أو أعد المحاولة بعد لحظات.</div> : savedOffersQuery.data?.length ? <div className="library-grid">{savedOffersQuery.data.map((savedOffer) => <article key={savedOffer.id} className="saved-offer-card"><div className="saved-offer-top"><span className="cloud-stamp"><BadgeCheck className="h-3.5 w-3.5" />محفوظ</span><button onClick={() => deleteOffer.mutate({ id: savedOffer.id })} disabled={deleteOffer.isPending} className="delete-offer" aria-label={`حذف ${savedOffer.title}`}><Trash2 className="h-4 w-4" /></button></div><h3>{savedOffer.title}</h3><p>{savedOffer.promise}</p><div className="saved-offer-meta"><span><Timer className="h-3.5 w-3.5" />{savedOffer.timeline}</span><span>{savedOffer.price}</span></div><div className="saved-offer-bottom"><span>{new Date(savedOffer.updatedAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" })}</span><span className="score-mini">وضوح {savedOffer.clarityScore}/100</span></div></article>)}</div> : <div className="library-empty"><div className="library-icon"><Sparkles className="h-6 w-6" /></div><div><h3>مكتبتك جاهزة لأول عرض</h3><p>اضغط «حفظ سحابي» في غرفة بناء العرض، وسنحتفظ بالنسخة في حسابك لتعود إليها لاحقًا.</p></div><button onClick={() => scrollToSection("tool")} className="library-cta">ابنِ عرضًا <ArrowLeft className="h-4 w-4" /></button></div>}
-          </div>
-        </section>
+        <OfferLibrary />
 
         <section id="method" className="relative bg-[#11162C] py-20 sm:py-28">
           <div className="mx-auto grid max-w-[1440px] gap-12 px-5 sm:px-8 lg:grid-cols-[.8fr_1.2fr] lg:items-center lg:px-12">

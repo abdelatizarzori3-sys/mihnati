@@ -34,6 +34,9 @@ export const offers = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    clientName: varchar("clientName", { length: 160 }).notNull().default(""),
+    sector: varchar("sector", { length: 120 }).notNull().default(""),
+    tagsJson: varchar("tagsJson", { length: 1024 }).notNull().default("[]"),
     skill: varchar("skill", { length: 255 }).notNull(),
     audience: varchar("audience", { length: 255 }).notNull(),
     outcome: text("outcome").notNull(),

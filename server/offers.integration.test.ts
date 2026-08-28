@@ -1,7 +1,7 @@
 import { inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { users } from "../drizzle/schema";
-import { createUserOffer, deleteUserOffer, getDb, listUserOffers } from "./db";
+import { createUserOffer, deleteUserOffer, getDb, listUserOffers, updateUserOffer } from "./db";
 
 const shouldRun = process.env.RUN_DB_INTEGRATION === "1";
 const suite = shouldRun ? describe : describe.skip;
@@ -9,6 +9,9 @@ const testStamp = `mihnati-integration-${Date.now()}`;
 const createdUserIds: number[] = [];
 
 const payload = {
+  clientName: "متجر اختبار",
+  sector: "تجارة إلكترونية",
+  tagsJson: JSON.stringify(["إطلاق", "رمضان"]),
   skill: "كتابة صفحات هبوط",
   audience: "متاجر إلكترونية ناشئة",
   outcome: "زيادة طلبات الاستشارة من الموقع",
@@ -49,17 +52,22 @@ suite("تكامل قاعدة بيانات عروض مِهنتي", () => {
     const saved = await createUserOffer(ownerOneId, payload);
     expect(saved.userId).toBe(ownerOneId);
     expect(saved.title).toBe(payload.title);
+    expect(saved.tagsJson).toBe(payload.tagsJson);
 
     const visibleToOwner = await listUserOffers(ownerOneId);
     expect(visibleToOwner.some((offer) => offer.id === saved.id)).toBe(true);
   });
 
-  it("يعزل العروض بين الحسابات ويرفض حذف مستخدم لعرض مستخدم آخر", async () => {
+  it("يعزل العروض بين الحسابات ويرفض تعديل أو حذف مستخدم لعرض مستخدم آخر", async () => {
     const privateOffer = await createUserOffer(ownerTwoId, { ...payload, title: "عرض خاص بالحساب الثاني" });
     const ownerOneOffers = await listUserOffers(ownerOneId);
 
     expect(ownerOneOffers.some((offer) => offer.id === privateOffer.id)).toBe(false);
+    await expect(updateUserOffer(ownerOneId, privateOffer.id, { ...payload, title: "تعديل غير مصرح" })).resolves.toBeUndefined();
     await expect(deleteUserOffer(ownerOneId, privateOffer.id)).resolves.toBe(false);
+    const updated = await updateUserOffer(ownerTwoId, privateOffer.id, { ...payload, title: "عرض محدّث", tagsJson: JSON.stringify(["عميل مهم", "متجر"]) });
+    expect(updated?.title).toBe("عرض محدّث");
+    expect(updated?.tagsJson).toBe(JSON.stringify(["عميل مهم", "متجر"]));
     await expect(deleteUserOffer(ownerTwoId, privateOffer.id)).resolves.toBe(true);
   });
 });

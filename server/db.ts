@@ -127,6 +127,21 @@ export async function createUserOffer(userId: number, input: SavedOfferInput) {
   return saved[0];
 }
 
+/** يعدّل العرض ضمن حساب مالكه فقط؛ يعيد undefined عند عدم ملكية السجل أو غيابه. */
+export async function updateUserOffer(userId: number, offerId: number, input: SavedOfferInput) {
+  const db = requireDatabase(await getDb());
+  const result = await db.update(offers).set(input).where(and(eq(offers.id, offerId), eq(offers.userId, userId)));
+  if (Number(result[0].affectedRows) === 0) return undefined;
+
+  const updated = await db
+    .select()
+    .from(offers)
+    .where(and(eq(offers.id, offerId), eq(offers.userId, userId)))
+    .limit(1);
+
+  return updated[0];
+}
+
 /** يحذف عرضاً إذا وفقط إذا كان معرّف المستخدم يطابق مالك السجل. */
 export async function deleteUserOffer(userId: number, offerId: number) {
   const db = requireDatabase(await getDb());
