@@ -1,4 +1,4 @@
-import { index, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, index, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -57,3 +57,43 @@ export const offers = mysqlTable(
 
 export type Offer = typeof offers.$inferSelect;
 export type InsertOffer = typeof offers.$inferInsert;
+
+/**
+ * سجل الاستحقاق الذي يحدّثه موصل دفع موثوق مستقبلاً فقط. لا تقرأ الواجهة
+ * هذا الجدول مباشرة ولا يوجد إجراء tRPC يمنح أو يعدّل حالته.
+ */
+export const subscriptionEntitlements = mysqlTable(
+  "subscriptionEntitlements",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+    provider: varchar("provider", { length: 64 }).notNull(),
+    externalCustomerId: varchar("externalCustomerId", { length: 255 }),
+    externalSubscriptionId: varchar("externalSubscriptionId", { length: 255 }).unique(),
+    status: mysqlEnum("status", ["active", "past_due", "cancelled", "expired"]).notNull(),
+    currentPeriodEndsAt: timestamp("currentPeriodEndsAt"),
+    cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").notNull().default(false),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => [index("subscription_entitlements_status_idx").on(table.status, table.currentPeriodEndsAt)],
+);
+
+export type SubscriptionEntitlement = typeof subscriptionEntitlements.$inferSelect;
+
+/** قوالب شخصية قابلة لإعادة الاستخدام، لا تظهر ولا تعدّل إلا داخل حساب مالكها. */
+export const offerTemplates = mysqlTable(
+  "offerTemplates",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 80 }).notNull(),
+    dataJson: text("dataJson").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => [index("offer_templates_user_updated_idx").on(table.userId, table.updatedAt)],
+);
+
+export type OfferTemplate = typeof offerTemplates.$inferSelect;
+export type InsertOfferTemplate = typeof offerTemplates.$inferInsert;

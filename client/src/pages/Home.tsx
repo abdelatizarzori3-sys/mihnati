@@ -5,6 +5,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 import OfferLibrary from "@/components/OfferLibrary";
+import ProOfferTools from "@/components/ProOfferTools";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import {
@@ -410,6 +411,21 @@ export default function Home() {
                 </article>
                 <div className="score-card"><div><span>مؤشر وضوح العرض</span><strong>{offerScore}<small>/100</small></strong></div><div className="score-track"><span style={{ width: `${offerScore}%` }} /></div><p>{offerScore > 85 ? "النتيجة واضحة بما يكفي لتبدأ عرضها." : "أضف نتيجة أدق لتقوية العرض."}</p></div>
                 <div className="proposal-actions"><button onClick={saveOffer} disabled={createOffer.isPending} className="action-button action-save">{createOffer.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{isAuthenticated ? "حفظ سحابي" : "حفظ بحسابي"}</button><button onClick={downloadOffer} className="action-button"><Download className="h-4 w-4" />تنزيل</button><button onClick={() => copyText(`${offer.title}\n${offer.promise}`, "ملخص العرض")} className="action-button"><Copy className="h-4 w-4" />نسخ</button></div>
+                <ProOfferTools
+                  offer={{ clientName: clientName.trim(), sector: sector.trim(), tags: parseTags(tagsText), skill, audience, outcome, model, title: offer.title, promise: offer.promise, deliverables: offer.includes, timeline: offer.timeline, price: offer.price, priceNote: offer.priceNote, outreach: offer.outreach, clarityScore: offerScore }}
+                  onApplyTemplate={(template) => {
+                    setClientName(template.clientName);
+                    setSector(template.sector);
+                    setTagsText(template.tags.join("، "));
+                    setSkill(template.skill);
+                    setAudience(template.audience);
+                    setOutcome(template.outcome);
+                    setModel(template.model);
+                    setOffer({ title: template.title, promise: template.promise, includes: template.deliverables, timeline: template.timeline, price: template.price, priceNote: template.priceNote, outreach: template.outreach });
+                    setHasGenerated(true);
+                    toast.success("تم تطبيق القالب على العرض الحالي", { description: "راجع التفاصيل ثم أنشئ أو احفظ النسخة المناسبة لعميلك." });
+                  }}
+                />
               </section>
             </div>
             <p className="mt-4 text-xs leading-6 text-[#75727C]">{isAuthenticated ? "تُحفظ عروضك في حسابك السحابي ولا تكون مرئية للمستخدمين الآخرين." : "سجّل دخولك لحفظ العرض في مكتبتك السحابية الخاصة."} اقتراحات السعر والمؤشرات تعليمية وليست ضمانًا للدخل أو للنتائج التجارية.</p>
