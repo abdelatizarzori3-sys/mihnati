@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertOffer, InsertUser, offers, users } from "../drizzle/schema";
+import { InsertOffer, InsertOfferTemplate, InsertUser, offerTemplates, offers, subscriptionEntitlements, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -146,5 +146,51 @@ export async function updateUserOffer(userId: number, offerId: number, input: Sa
 export async function deleteUserOffer(userId: number, offerId: number) {
   const db = requireDatabase(await getDb());
   const result = await db.delete(offers).where(and(eq(offers.id, offerId), eq(offers.userId, userId)));
+  return Number(result[0].affectedRows) > 0;
+}
+
+/** لا يعيد غياب قاعدة البيانات استحقاقًا؛ يجب أن تفشل طبقة Pro مغلقة. */
+export async function getUserSubscriptionEntitlement(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(subscriptionEntitlements)
+    .where(eq(subscriptionEntitlements.userId, userId))
+    .limit(1);
+  return result[0];
+}
+
+export type SavedOfferTemplateInput = Omit<InsertOfferTemplate, "id" | "userId" | "createdAt" | "updatedAt">;
+
+/** يعيد قوالب مالك الحساب فقط. */
+export async function listUserOfferTemplates(userId: number) {
+  const db = requireDatabase(await getDb());
+  return db
+    .select()
+    .from(offerTemplates)
+    .where(eq(offerTemplates.userId, userId))
+    .orderBy(desc(offerTemplates.updatedAt), desc(offerTemplates.id))
+    .limit(30);
+}
+
+/** يحفظ قالبًا بعد أن يتحقق الموجّه من استحقاق Pro وهوية الجلسة. */
+export async function createUserOfferTemplate(userId: number, input: SavedOfferTemplateInput) {
+  const db = requireDatabase(await getDb());
+  const result = await db.insert(offerTemplates).values({ ...input, userId });
+  const insertId = Number(result[0].insertId);
+  const saved = await db
+    .select()
+    .from(offerTemplates)
+    .where(and(eq(offerTemplates.id, insertId), eq(offerTemplates.userId, userId)))
+    .limit(1);
+  if (!saved[0]) throw new Error("تعذر تأكيد حفظ القالب.");
+  return saved[0];
+}
+
+/** يحذف القالب فقط عندما يطابق مالك الجلسة، فلا يقبل معرف مستخدم من العميل. */
+export async function deleteUserOfferTemplate(userId: number, templateId: number) {
+  const db = requireDatabase(await getDb());
+  const result = await db.delete(offerTemplates).where(and(eq(offerTemplates.id, templateId), eq(offerTemplates.userId, userId)));
   return Number(result[0].affectedRows) > 0;
 }
