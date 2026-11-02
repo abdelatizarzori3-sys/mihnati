@@ -191,3 +191,19 @@ button { cursor: pointer; }
 @media (max-width: 1279px) { .decision-thread { display: none; } }
 @media (max-width: 640px) { .maturity-legend { flex-wrap: wrap; gap: .45rem; }.maturity-legend i { width: 1.3rem; }.pricing-card:first-child, .pricing-card:nth-child(3) { margin-top: 0; } }
 @media (min-width: 1024px) { .offer-room { grid-template-columns: 0.75fr 1.2fr 1.12fr; } .room-rail { min-height: 680px; } .room-form { padding: 2.2rem; } .proposal-pane { padding: 1.6rem; } #business .pricing-layout { grid-template-columns: .72fr 1.35fr .88fr; align-items: start; } .library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+
+/* Future interface: career offer atelier */
+:root { --atelier-night:#0b1026; --atelier-violet:#9b90ff; --atelier-mint:#8ef3ca; --atelier-paper:#f4f0ff; }
+body { background:radial-gradient(circle at 84% 7%,rgba(155,144,255,.22),transparent 28rem),radial-gradient(circle at 8% 60%,rgba(142,243,202,.12),transparent 30rem),var(--atelier-night)!important; }
+body::before { content:""; position:fixed; inset:0; pointer-events:none; opacity:.3; background:radial-gradient(circle at 25% 30%,rgba(255,255,255,.14) 0 1px,transparent 1.5px); background-size:2rem 2rem; mask-image:linear-gradient(145deg,#000,transparent 72%); }
+.decision-thread { filter:drop-shadow(0 0 1rem rgba(155,144,255,.3)); }
+.decision-node { border-color:rgba(155,144,255,.4)!important; box-shadow:0 0 1.6rem rgba(155,144,255,.14),inset 0 1px rgba(255,255,255,.08); }
+.brand-lockup,.account-pill,.offer-room,.rail-step,.button-quiet { border-color:rgba(155,144,255,.23)!important; }
+.hero-wash { background:radial-gradient(circle at 68% 38%,rgba(155,144,255,.34),transparent 39%),radial-gradient(circle at 30% 65%,rgba(142,243,202,.17),transparent 34%)!important; }
+.hero-image { box-shadow:0 2rem 5rem rgba(0,0,0,.38),0 0 0 1px rgba(155,144,255,.22); }
+.button-primary { background:linear-gradient(135deg,#9b90ff,#8ef3ca)!important; color:#11162c!important; box-shadow:0 .9rem 2rem rgba(155,144,255,.25); }
+.offer-room { background:linear-gradient(145deg,rgba(19,27,59,.94),rgba(10,14,35,.96))!important; box-shadow:0 1.4rem 4rem rgba(0,0,0,.25); }
+.pro-offer-tools,.pro-offer-tools button,[class*="pro"] { scroll-margin-top:1rem; }
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline:2px solid var(--atelier-mint)!important; outline-offset:3px; }
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
